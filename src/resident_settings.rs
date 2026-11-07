@@ -88,6 +88,6 @@ impl crate::app::App {
         }
         ui.painter().text(Pos2::new(stage.center().x,stage.bottom()-22.0),egui::Align2::CENTER_CENTER,"按住图标左右拖动",theme::font(11.0,W::Regular),Color32::from_gray(160));
         ui.add_space(8.0);
-        ui.label(RichText::new("灰色图标为暂未显示的组件；位置会保留。").size(11.0).color(ui.visuals().weak_text_color()));
+        ui.label(RichText::new("灰色图标为暂未显示的组件；位置会保留。").size(crate::theme::ui_size(11.0)).color(ui.visuals().weak_text_color()));
     }
 }

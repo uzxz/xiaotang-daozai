@@ -10,8 +10,14 @@ fn parts(body:&BodyStructure<'_>,path:&mut Vec<u32>,out:&mut Vec<Vec<u32>>){
         },
         BodyStructure::Text{common,..}|BodyStructure::Basic{common,..}=>{
             let ty=&common.ty;
+            // 小体积内嵌图片（multipart/related 的 cid）随正文一起取，供全文窗口渲染；大图按附件对待。
+            let is_image=ty.ty.eq_ignore_ascii_case("image") && match body {
+                BodyStructure::Basic{other,..}|BodyStructure::Text{other,..}=>other.octets>0 && other.octets<=2_000_000,
+                _=>false,
+            };
             if ty.ty.eq_ignore_ascii_case("text") && ["plain","html","calendar"].iter().any(|sub|ty.subtype.eq_ignore_ascii_case(sub))
-                || ty.ty.eq_ignore_ascii_case("application") && ty.subtype.eq_ignore_ascii_case("ics") {
+                || ty.ty.eq_ignore_ascii_case("application") && ty.subtype.eq_ignore_ascii_case("ics")
+                || is_image {
                 out.push(if path.is_empty(){vec![1]}else{path.clone()});
             }
         },
@@ -20,11 +26,14 @@ fn parts(body:&BodyStructure<'_>,path:&mut Vec<u32>,out:&mut Vec<Vec<u32>>){
 }
 
 fn make_item(parsed:Parsed,fetch:&imap::types::Fetch,account:&Account)->Item{
+    let mut parsed=parsed;
+    let images=std::mem::take(&mut parsed.images);
+    let html=if parsed.html.trim().is_empty(){None}else{Some(parsed.html.as_str().into())};
     Item {received_unix: fetch.internal_date().map(|d|d.timestamp()), account:account.email.clone(),
         from:if parsed.from.is_empty(){account.email.clone()}else{parsed.from.clone()},
         subject:if parsed.subject.is_empty(){"（无主题）".into()}else{parsed.subject.clone()},
         time:fetch.internal_date().map(|d|d.with_timezone(&chrono::Local).format("%m-%d %H:%M").to_string()).unwrap_or_default(),
-        code:code_of(&parsed),summary:body_of(&parsed).into(),links:links_of(&parsed),meeting:meeting_of(&parsed.calendar),uid:fetch.uid.unwrap_or(0)}
+        code:code_of(&parsed),summary:body_of(&parsed).into(),html,images,links:links_of(&parsed),meeting:meeting_of(&parsed.calendar),uid:fetch.uid.unwrap_or(0)}
 }
 
 /// 服务器明确拒绝了这条命令（NO / BAD）：连接仍然同步，可以换一种方式读这封信。
@@ -67,7 +76,7 @@ pub(super) fn item<S:Read+Write>(session:&mut imap::Session<S>,uid:u32,account:&
         raw.extend_from_slice(body);
         let part=parse_message(&raw);
         parsed.text.push_str(&part.text);parsed.html.push_str(&part.html);parsed.calendar.push_str(&part.calendar);
-        parsed.emphasized.extend(part.emphasized);
+        parsed.emphasized.extend(part.emphasized);parsed.images.extend(part.images);
     }
     if !parsed.text.trim().is_empty(){parsed.emphasized.clear();}
     Ok(Some(make_item(parsed,fetch,account)))

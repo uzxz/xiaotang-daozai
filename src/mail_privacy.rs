@@ -83,7 +83,7 @@ impl Privacy {
 #[cfg(test)]
 mod tests {
     use super::*;
-    fn item()->Item{Item{account:"test@example.com".into(),from:"Example".into(),subject:"验证码 123456 有效期为30秒".into(),time:String::new(),received_unix:Some(100),code:Some("123456".into()),summary:"验证码 123456 有效期为30秒".into(),links:vec![],meeting:None,uid:1}}
+    fn item()->Item{Item{account:"test@example.com".into(),from:"Example".into(),subject:"验证码 123456 有效期为30秒".into(),time:String::new(),received_unix:Some(100),code:Some("123456".into()),summary:"验证码 123456 有效期为30秒".into(),html:None,images:vec![],links:vec![],meeting:None,uid:1}}
     #[test] fn explicit_lifetime_requires_code_context_and_unambiguous_duration(){
         assert_eq!(explicit_lifetime("验证码 123456 有效期为30秒","","123456"),Some(30));
         assert_eq!(explicit_lifetime("","Your verification code 123456 is valid for 5 minutes.","123456"),Some(300));

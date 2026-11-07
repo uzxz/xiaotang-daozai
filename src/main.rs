@@ -119,6 +119,7 @@ impl Shell {
         #[cfg(windows)] let system_rx=daozai::system::observe(cc.egui_ctx.clone(),system_state.clone(),initial_input);
         // 岛体大小只作用于主窗口，在首帧之前生效，避免启动时先按 100% 闪一下。
         #[cfg(windows)] eframe::set_root_viewport_scale(app.settings.island_scale());
+        daozai::theme::set_font_scale(app.settings.font_scale);
         Self {
             app,
             t0: Instant::now(),
@@ -284,6 +285,7 @@ impl eframe::App for Shell {
         // 设置里改了岛体大小：下一帧起主窗口按新倍率栅格化，定位逻辑随像素比变化同步调整画布。
         #[cfg(windows)] eframe::share_root_font_scale(self.app.settings_open);
         #[cfg(windows)] eframe::set_root_viewport_scale(self.app.settings.island_scale());
+        daozai::theme::set_font_scale(self.app.settings.font_scale);
         #[cfg(windows)]
         {
             // 用帧间隔限制刷新，绕过部分 Intel 驱动在垂直同步中的忙等待。
@@ -442,6 +444,7 @@ impl eframe::App for Shell {
             self.mail_sig=sig;
         }
         while let Some(ev)=self.mail.try_recv(){self.app.mail_event(ev);}
+        self.app.poll_translate();
         // 日程连接或自动同步开关变化时下发给工作线程。
         // 录制/截图演示用的是假账号，别让真服务去连（会立刻失败、把状态改成红色）。
         #[cfg(feature="record")]

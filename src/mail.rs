@@ -257,6 +257,10 @@ pub struct Item {
     pub received_unix: Option<i64>,
     /// 完整纯文字正文，保留分段，仅保存在内存中。
     pub summary: std::sync::Arc<str>,
+    /// 原始 HTML 正文（text/html 才有），仅保存在内存中，供全文窗口渲染样式。
+    pub html: Option<std::sync::Arc<str>>,
+    /// 内嵌图片（Content-ID -> 解码字节），仅保存在内存中。
+    pub images: Vec<(String, std::sync::Arc<Vec<u8>>)>,
     pub links: Vec<Link>,
     /// 会议邀请（来自 .ics / text/calendar），没有就是 `None`。
     pub meeting: Option<Meeting>,
@@ -340,6 +344,8 @@ pub struct Parsed {
     /// text/calendar 正文（.ics 原文，没有则空）。
     pub calendar: String,
     pub emphasized: Vec<String>,
+    /// 内嵌图片（Content-ID -> 解码字节），只保存在内存里；单图 2MB 上限，供 HTML 渲染。
+    pub images: Vec<(String, std::sync::Arc<Vec<u8>>)>,
 }
 
 fn header(mail: &mailparse::ParsedMail, name: &str) -> String {
@@ -362,7 +368,7 @@ fn display_addr(raw: &str) -> String {
         .unwrap_or_else(|| raw.trim().trim_matches('"').to_string())
 }
 
-fn collect(mail: &mailparse::ParsedMail, plain: &mut String, html: &mut String, calendar: &mut String) {
+fn collect(mail: &mailparse::ParsedMail, plain: &mut String, html: &mut String, calendar: &mut String, images: &mut Vec<(String, std::sync::Arc<Vec<u8>>)>) {
     if mail.subparts.is_empty() {
         let ct = mail.ctype.mimetype.to_ascii_lowercase();
         if ct == "text/plain" {
@@ -380,10 +386,20 @@ fn collect(mail: &mailparse::ParsedMail, plain: &mut String, html: &mut String, 
                 calendar.push_str(&body);
                 calendar.push('\n');
             }
+        } else if ct.starts_with("image/") {
+            // multipart/related 的内嵌图片（cid），随正文一起留在内存供 HTML 渲染；
+            // 超过 2MB 视为普通附件，不读进常驻进程。
+            if let Ok(body) = mail.get_body_raw() {
+                if !body.is_empty() && body.len() <= 2_000_000 {
+                    let cid = header(mail, "Content-ID");
+                    let cid = cid.trim().trim_start_matches('<').trim_end_matches('>').to_string();
+                    images.push((cid, std::sync::Arc::new(body)));
+                }
+            }
         }
     } else {
         for part in &mail.subparts {
-            collect(part, plain, html, calendar);
+            collect(part, plain, html, calendar, images);
         }
     }
 }
@@ -398,18 +414,20 @@ pub fn parse_message(raw: &[u8]) -> Parsed {
             html: String::new(),
             calendar: String::new(),
             emphasized: Vec::new(),
+            images: Vec::new(),
         };
     };
     let subject = header(&mail, "Subject");
     let from = display_addr(&header(&mail, "From"));
     let (mut plain, mut html, mut calendar) = (String::new(), String::new(), String::new());
-    collect(&mail, &mut plain, &mut html, &mut calendar);
+    let mut images = Vec::new();
+    collect(&mail, &mut plain, &mut html, &mut calendar, &mut images);
     let emphasized = if plain.trim().is_empty() {
         otp::emphasized(&html)
     } else {
         Vec::new()
     };
-    Parsed { from, subject, text: plain, html, calendar, emphasized }
+    Parsed { from, subject, text: plain, html, calendar, emphasized, images }
 }
 
 /// 优先纯文本，HTML 邮件转成文字；保留完整正文与段落。

@@ -947,6 +947,25 @@ impl App {
         let read=c.hit(266.0,42.0,60.0,14.0,("mail-read",&item.account,item.uid)).on_hover_text("在独立窗口阅读完整正文");
         c.text(324.0,50.0,"阅读全文",10.5,W::Regular,if read.hovered(){theme::BLUE}else{theme::GRAY},H::Right);
         if read.clicked(){self.mail.reading=Some(raw.clone());self.mail.reader_focus=true;}
+        // 翻译入口：空闲时点击发起请求，有译文后点击切换原文/译文；没配账号或遮蔽期不显示。
+        match self.translate_view(raw) {
+            crate::translate::View::Idle=>{
+                let hit=c.hit(212.0,42.0,48.0,14.0,("mail-translate",item.uid)).on_hover_text("译成中文（正文会发送到阿里云翻译）");
+                c.text(260.0,50.0,"翻译",10.5,W::Regular,if hit.hovered(){theme::BLUE}else{theme::GRAY},H::Right);
+                if hit.clicked(){self.translate_request(raw);}
+            },
+            crate::translate::View::Busy=>{
+                let active=((self.t*3.0) as usize)%3;
+                let dots=["…","··","···"][active];
+                c.text(260.0,50.0,&format!("翻译{dots}"),10.5,W::Regular,theme::GRAY,H::Right);
+            },
+            crate::translate::View::Ready{shown}=>{
+                let hit=c.hit(212.0,42.0,48.0,14.0,("mail-translate-toggle",item.uid)).on_hover_text(if shown{"显示原文"}else{"显示译文"});
+                c.text(260.0,50.0,if shown{"原文"}else{"译文"},10.5,W::Regular,if hit.hovered(){theme::BLUE}else{theme::GRAY},H::Right);
+                if hit.clicked(){self.translate_toggle(raw);}
+            },
+            crate::translate::View::NoAccounts|crate::translate::View::Hidden=>{},
+        }
         let subject = c.fit(&item.subject, 13.5, W::Semibold, 328.0);
         c.text(46.0, 73.0, &subject, 13.5, W::Semibold, theme::WHITE, H::Left);
         c.hit(46.0,58.0,328.0,20.0,("mail-subject",&item.account,item.uid)).on_hover_text(&item.subject);
@@ -964,16 +983,25 @@ impl App {
         content.spacing_mut().item_spacing.y=6.0*c.s;
         content.style_mut().spacing.scroll.floating=false;
         content.spacing_mut().scroll.bar_width=4.0*c.s;
+        // 译文（若有且开启）替换正文显示；翻译失败时在正文区显示原因。
+        let tkey=(item.account.clone(),item.uid);
+        let (body_text,showing_tr)=match (self.translate.show.get(&tkey).copied().unwrap_or(true),self.translate.cache.get(&tkey)){
+            (true,Some(Ok(text)))=>(text.as_str(),true),
+            (true,Some(Err(error)))=>(error.as_str(),true),
+            _=>(item.summary.as_ref(),false),
+        };
         egui::ScrollArea::vertical().id_salt(("mail-body",&item.account,item.uid)).max_height(90.0*c.s).auto_shrink([false,false]).show(&mut content,|ui|{
-            if !item.summary.is_empty() {
-                ui.add(egui::Label::new(egui::RichText::new(item.summary.as_ref()).font(c.font(12.0,W::Regular)).color(Color32::from_gray(220))).wrap());
+            if !body_text.is_empty() {
+                ui.add(egui::Label::new(egui::RichText::new(body_text).font(c.font(12.0,W::Regular)).color(if showing_tr{Color32::from_rgb(150,200,255)}else{Color32::from_gray(220)})).wrap());
             }else if item.links.is_empty(){
                 ui.label(egui::RichText::new("（这封邮件没有正文）").font(c.font(12.0,W::Regular)).color(theme::DIM));
             }
-            for link in &item.links {
-                let text=format!("{} ↗",c.fit(&link.label,12.0,W::Regular,295.0));
-                if ui.add(egui::Link::new(egui::RichText::new(text).font(c.font(12.0,W::Regular)).color(theme::BLUE))).on_hover_text(&link.url).clicked(){
-                    cmds.push(Cmd::OpenUrl(link.url.clone()));
+            if !showing_tr {
+                for link in &item.links {
+                    let text=format!("{} ↗",c.fit(&link.label,12.0,W::Regular,295.0));
+                    if ui.add(egui::Link::new(egui::RichText::new(text).font(c.font(12.0,W::Regular)).color(theme::BLUE))).on_hover_text(&link.url).clicked(){
+                        cmds.push(Cmd::OpenUrl(link.url.clone()));
+                    }
                 }
             }
         });

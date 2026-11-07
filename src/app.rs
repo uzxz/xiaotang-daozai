@@ -468,6 +468,10 @@ pub(crate) struct MailState {
     pub open_uid: Option<(String, u32)>,
     pub reading: Option<mail::Item>,
     pub reader_focus: bool,
+    /// 全文窗口的 HTML 富文本块缓存（按账号 + uid），换信即重建。
+    pub html_cache: Option<((String, u32), Vec<crate::mail_html::Block>)>,
+    /// 全文窗口内嵌图片的纹理缓存，与块缓存同步清理。
+    pub html_textures: std::collections::HashMap<String, eframe::egui::TextureHandle>,
     /// 已经提醒过的会议，键是 `UID + DTSTART`（邮件和日历两条来源共用）。
     pub fired: std::collections::HashSet<String>,
 }
@@ -698,6 +702,8 @@ pub struct App {
     bt_initialized: bool,
     /// v0.5.5：邮件账号、最近邮件与设置表单。
     pub(crate) mail: MailState,
+    /// 邮件翻译（阿里云）：账号配置、后台任务与译文缓存。
+    pub(crate) translate: crate::translate::State,
     /// v0.5.6：日历（CalDAV）配置、未来 24 小时事件与设置表单。
     pub(crate) calendar: CalendarState,
     pub(crate) quota: crate::quota_ui::State,
@@ -800,6 +806,7 @@ impl App {
             bt_shown: Vec::new(),
             bt_initialized: false,
             mail: MailState { accounts: mail::load_accounts(), ..Default::default() },
+            translate: crate::translate::State::load(),
             calendar: CalendarState::load(),
             quota: crate::quota_ui::State::load(),
             updates: Default::default(),
@@ -829,6 +836,8 @@ impl App {
                 safe.from=crate::mail_privacy::mask(&safe.from,code);
                 safe.summary=self.mail.privacy.masked_body(item);
                 safe.links.clear(); // Avoid tooltip/URL/copy leaks while hidden.
+                // 遮蔽期不保留原始 HTML 与图片，样式渲染无法绕过验证码掩码。
+                safe.html=None;safe.images.clear();
                 if let Some(event)=&mut safe.meeting {event.title=crate::mail_privacy::mask(&event.title,code);}
                 safe.code=None;
             }
@@ -1115,6 +1124,8 @@ impl App {
                 time: (*time).into(),
                 code: if with_code { (*code).map(str::to_string) } else { None },
                 summary: (*summary).into(),
+                html: None,
+                images: Vec::new(),
                 links: Vec::new(),
                 meeting: meeting.as_ref().map(|(start, at)| mail::Meeting { all_day:false, end:None, title: "周五方案评审".into(), start: *start, at: at.clone(), uid: "demo-ics-1".into() }),
                 uid: 900 - i as u32,

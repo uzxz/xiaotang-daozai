@@ -43,9 +43,18 @@ impl Accent {
 }
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Account {pub id:String, pub provider:Provider, pub alias:String, pub source:PathBuf, pub slot:Option<String>, pub enabled:bool, pub pinned:bool}
+/// 额度请求的网络代理模式：跟随系统（环境变量与注册表，默认）、自定义地址、直连。
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ProxyMode { #[default] System, Custom, Direct }
+impl ProxyMode {
+    pub const ALL:[Self;3]=[Self::System,Self::Custom,Self::Direct];
+    pub fn label(self)->&'static str{match self{Self::System=>"跟随系统",Self::Custom=>"自定义",Self::Direct=>"直连"}}
+    fn key(self)->&'static str{match self{Self::System=>"system",Self::Custom=>"custom",Self::Direct=>"direct"}}
+    fn parse(s:&str)->Self{Self::ALL.into_iter().find(|m|m.key()==s).unwrap_or_default()}
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Config {pub enabled:bool, pub compact:bool, pub selected:String, pub accounts:Vec<Account>, pub colors:HashMap<String,Accent>}
-impl Default for Config {fn default()->Self {Self{enabled:true,compact:true,selected:String::new(),accounts:vec![],colors:HashMap::new()}}}
+pub struct Config {pub enabled:bool, pub compact:bool, pub selected:String, pub accounts:Vec<Account>, pub colors:HashMap<String,Accent>, pub proxy_mode:ProxyMode, pub proxy_url:String}
+impl Default for Config {fn default()->Self {Self{enabled:true,compact:true,selected:String::new(),accounts:vec![],colors:HashMap::new(),proxy_mode:ProxyMode::System,proxy_url:String::new()}}}
 impl Config {
     pub fn load()->Self {
         let path=crate::model::config_dir().join("ai-quota.json");
@@ -57,9 +66,9 @@ impl Config {
             id:a["id"].as_str()?.into(),provider:Provider::parse(a["provider"].as_str()?)?,alias:a["alias"].as_str()?.into(),source:PathBuf::from(a["source"].as_str()?),slot:a["slot"].as_str().map(str::to_owned),enabled:a["enabled"].as_bool().unwrap_or(true),pinned:a["pinned"].as_bool().unwrap_or(false)
         })).collect();
         let colors=v["colors"].as_object().into_iter().flatten().filter_map(|(id,value)|{let color=Accent::parse(value.as_str()?);(color!=Accent::Brand).then(||(id.clone(),color))}).collect();
-        Self{enabled:v["enabled"].as_bool().unwrap_or(true),compact:v["compact"].as_bool().unwrap_or(true),selected:v["selected"].as_str().unwrap_or_default().into(),accounts,colors}
+        Self{enabled:v["enabled"].as_bool().unwrap_or(true),compact:v["compact"].as_bool().unwrap_or(true),selected:v["selected"].as_str().unwrap_or_default().into(),accounts,colors,proxy_mode:v["proxy_mode"].as_str().map(ProxyMode::parse).unwrap_or_default(),proxy_url:v["proxy_url"].as_str().unwrap_or_default().into()}
     }
-    fn json(&self)->Value {let colors:serde_json::Map<String,Value>=self.colors.iter().map(|(id,color)|(id.clone(),json!(color.key()))).collect();json!({"enabled":self.enabled,"compact":self.compact,"selected":self.selected,"colors":colors,"accounts":self.accounts.iter().map(|a|json!({"id":a.id,"provider":a.provider.name(),"alias":a.alias,"source":a.source,"slot":a.slot,"enabled":a.enabled,"pinned":a.pinned})).collect::<Vec<_>>()})}
+    fn json(&self)->Value {let colors:serde_json::Map<String,Value>=self.colors.iter().map(|(id,color)|(id.clone(),json!(color.key()))).collect();json!({"enabled":self.enabled,"compact":self.compact,"selected":self.selected,"colors":colors,"proxy_mode":self.proxy_mode.key(),"proxy_url":self.proxy_url,"accounts":self.accounts.iter().map(|a|json!({"id":a.id,"provider":a.provider.name(),"alias":a.alias,"source":a.source,"slot":a.slot,"enabled":a.enabled,"pinned":a.pinned})).collect::<Vec<_>>()})}
     pub fn save(&self) {
         let dir=crate::model::config_dir();let _=fs::create_dir_all(&dir);
         if let Ok(raw)=serde_json::to_vec_pretty(&self.json()){let _=crate::model::atomic_write(&dir.join("ai-quota.json"),&raw);}
@@ -305,9 +314,16 @@ impl Service {
         None
     }
 }
+/// 额度请求共用的 HTTP agent。代理模式来自 ai-quota.json：
+/// 跟随系统=环境变量+注册表（默认，行为不变）；自定义=设置里填的地址；直连=完全不走代理。
 fn http_agent()->ureq::Agent{
     let mut builder=ureq::AgentBuilder::new().timeout(Duration::from_secs(15)).redirects(0);
-    let proxy=["HTTPS_PROXY","https_proxy","ALL_PROXY","all_proxy","HTTP_PROXY","http_proxy"].iter().find_map(|key|std::env::var(key).ok().filter(|s|!s.is_empty())).or_else(system_proxy);
+    let config=Config::load();
+    let proxy=match config.proxy_mode{
+        ProxyMode::Direct=>None,
+        ProxyMode::Custom=>{let url=config.proxy_url.trim();(!url.is_empty()).then(||url.to_string())},
+        ProxyMode::System=>["HTTPS_PROXY","https_proxy","ALL_PROXY","all_proxy","HTTP_PROXY","http_proxy"].iter().find_map(|key|std::env::var(key).ok().filter(|s|!s.is_empty())).or_else(system_proxy),
+    };
     if let Some(proxy)=proxy.and_then(|s|ureq::Proxy::new(s).ok()){builder=builder.proxy(proxy);}
     builder.build()
 }

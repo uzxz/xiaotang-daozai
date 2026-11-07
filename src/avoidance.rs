@@ -71,13 +71,13 @@ impl Picker {
                         ui.painter().text(center,egui::Align2::CENTER_CENTER,"×",crate::theme::font(9.0,crate::theme::W::Regular),ui.visuals().text_color());
                         if remove_button.on_hover_text(format!("移除 {name}")).clicked(){remove=Some(index);}
                     }
-                    if settings.avoid_apps.is_empty(){ui.add_sized([icon_width,44.0],egui::Label::new(egui::RichText::new("添加需要自动避让的其他应用").size(11.5).weak()));}
+                    if settings.avoid_apps.is_empty(){ui.add_sized([icon_width,44.0],egui::Label::new(egui::RichText::new("添加需要自动避让的其他应用").size(crate::theme::ui_size(11.5)).weak()));}
                 });
                 });
                 });
                 if let Some(index)=remove{settings.avoid_apps.remove(index);}
                 ui.add_space(5.0);
-                ui.label(egui::RichText::new("无需全屏或最大化；窗口移开或切换应用后恢复。").size(11.0).weak());
+                ui.label(egui::RichText::new("无需全屏或最大化；窗口移开或切换应用后恢复。").size(crate::theme::ui_size(11.0)).weak());
             });
         });
     }
@@ -100,7 +100,7 @@ impl Picker {
             ui.visuals_mut().override_text_color=Some(crate::settings_theme::color(ctx,Color32::from_gray(235),Color32::from_gray(30)));
             ui.set_width(410.0);
             ui.heading("添加应用");
-            ui.label(egui::RichText::new("选择正在运行的应用，添加后自动记住。").size(12.0).weak());
+            ui.label(egui::RichText::new("选择正在运行的应用，添加后自动记住。").size(crate::theme::ui_size(12.0)).weak());
             ui.add_space(12.0);
             ui.add(egui::TextEdit::singleline(&mut self.query).hint_text("搜索应用或窗口标题").desired_width(f32::INFINITY));
             ui.add_space(8.0);
@@ -129,7 +129,7 @@ impl Picker {
             });
             ui.add_space(10.0);
             ui.horizontal(|ui|{
-                ui.label(egui::RichText::new("没有找到？先打开应用，再").size(11.5).weak());
+                ui.label(egui::RichText::new("没有找到？先打开应用，再").size(crate::theme::ui_size(11.5)).weak());
                 if ui.add_enabled(self.rx.is_none(),egui::Button::new("刷新列表")).clicked(){self.refresh(ctx);}
             });
             ui.add_space(12.0);

@@ -41,7 +41,25 @@ pub enum W {
     Bold,
 }
 
+/// 界面字体缩放（百分比）。设置里调整，岛内文字与设置/阅读等窗口同步生效；
+/// 只放大字形，不改布局坐标，测量（fit/wrap）与绘制共用同一 FontId 所以保持一致。
+static FONT_SCALE: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(100);
+
+pub fn set_font_scale(pct: u32) {
+    FONT_SCALE.store(pct.clamp(80, 180), std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn font_scale() -> u32 {
+    FONT_SCALE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// 供不走 theme::font 的显式字号（RichText::size 等）跟随同一缩放。
+pub fn ui_size(size: f32) -> f32 {
+    size * (font_scale() as f32 / 100.0)
+}
+
 pub fn font(size: f32, w: W) -> FontId {
+    let size = ui_size(size);
     match w {
         W::Regular => FontId::proportional(size),
         W::Semibold => FontId::new(size, FontFamily::Name("semibold".into())),

@@ -171,14 +171,23 @@ impl Dock {
 
 /// 岛体大小（百分比）的范围与步进。
 pub const ISLAND_SIZE_MIN: u32 = 80;
-pub const ISLAND_SIZE_MAX: u32 = 140;
+pub const ISLAND_SIZE_MAX: u32 = 160;
 pub const ISLAND_SIZE_STEP: u32 = 5;
+/// 界面字体大小（百分比）的范围与步进，只放大字形不改布局。
+pub const FONT_SCALE_MIN: u32 = 80;
+pub const FONT_SCALE_MAX: u32 = 180;
+pub const FONT_SCALE_STEP: u32 = 5;
 /// 水平位置：-100 = 最左，0 = 居中，100 = 最右（按可移动范围的百分比）。
 pub const ISLAND_OFFSET_MAX: i32 = 100;
 
 pub fn island_size_value(value: u32) -> u32 {
     let value = value.clamp(ISLAND_SIZE_MIN, ISLAND_SIZE_MAX);
     (value + ISLAND_SIZE_STEP / 2) / ISLAND_SIZE_STEP * ISLAND_SIZE_STEP
+}
+
+pub fn font_scale_value(value: u32) -> u32 {
+    let value = value.clamp(FONT_SCALE_MIN, FONT_SCALE_MAX);
+    (value + FONT_SCALE_STEP / 2) / FONT_SCALE_STEP * FONT_SCALE_STEP
 }
 
 #[derive(Clone, Debug)]
@@ -190,6 +199,8 @@ pub struct Settings {
     pub glass_blur: bool,
     pub island_size: u32,
     pub island_offset: i32,
+    /// 界面字体大小（百分比，80–180），与岛体大小互相独立。
+    pub font_scale: u32,
     /// 停靠边缘；左右停靠时 `island_offset` 表示上下位置。
     pub dock: Dock,
     pub settings_theme: crate::settings_theme::SettingsTheme,
@@ -241,7 +252,7 @@ pub struct Settings {
 
 impl Default for Settings {
     fn default() -> Self {
-        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, dock: Dock::Top, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 8], page_order: [0,1,2,3,4,5,6,7], show_battery: true, clock_12h: false, clock_period: 0, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, read_notifications:false, wechat_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, mail_enabled: true, mail_code: true, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true }
+        Self { display_id: String::new(), skin: Skin::Classic, island_shape: IslandShape::Notch, glass_blur: true, island_size: 100, island_offset: 0, font_scale: 100, dock: Dock::Top, settings_theme: Default::default(), pet: true, minimal: false, browser_minimal: false, avoid_browsers: true, avoid_apps: Vec::new(), visible_pages: [true; 8], page_order: [0,1,2,3,4,5,6,7], show_battery: true, clock_12h: false, clock_period: 0, resident_order: Vec::new(), system_hud: true, bluetooth_notifications: true, read_notifications:false, wechat_notifications:false, wechat_tray_open:false, qq_only:false, notification_preview:false, notifications: true, sound: false, lyrics_enabled:true, island_lyrics:false, lyric_delay_ms:-350, hide_fullscreen: true, focus_minutes: 25, rest_minutes: 5, water_minutes: 45, serving_ml: 250, water_start: 9, water_end: 22, mail_enabled: true, mail_code: true, mail_code_hide_seconds:60, mail_interval: 120, mail_ics: 15, ignored_mail_events: Vec::new(), calendar_prompt: true, calendar_auto_sync: true, clipboard_history: true }
     }
 }
 
@@ -249,6 +260,11 @@ impl Settings {
     /// 主窗口（灵动岛）的界面缩放倍率。
     pub fn island_scale(&self) -> f32 {
         island_size_value(self.island_size) as f32 / 100.0
+    }
+
+    /// 界面字体缩放倍率。
+    pub fn font_scale(&self) -> f32 {
+        font_scale_value(self.font_scale) as f32 / 100.0
     }
 
     /// 水平位置，-1..=1。
@@ -284,6 +300,7 @@ impl Settings {
                 "dock" => s.dock = Dock::parse(&v),
                 "glass_blur" => s.glass_blur = v != "0",
                 "island_size" => s.island_size = island_size_value(v.parse::<u32>().unwrap_or(100)),
+                "font_scale" => s.font_scale = font_scale_value(v.parse::<u32>().unwrap_or(100)),
                 "island_offset" => s.island_offset = v.parse::<i32>().unwrap_or(0).clamp(-ISLAND_OFFSET_MAX, ISLAND_OFFSET_MAX),
                 "pet" => s.pet = v == "1" || v.eq_ignore_ascii_case("true"),
                 "minimal" => s.minimal = v == "1" || v.eq_ignore_ascii_case("true"),
@@ -353,6 +370,7 @@ impl Settings {
                 ("dock".into(),self.dock.key().into()),
                 ("glass_blur".into(),(self.glass_blur as u8).to_string()),
                 ("island_size".into(),island_size_value(self.island_size).to_string()),
+                ("font_scale".into(),font_scale_value(self.font_scale).to_string()),
                 ("island_offset".into(),self.island_offset.clamp(-ISLAND_OFFSET_MAX,ISLAND_OFFSET_MAX).to_string()),
                 ("settings_theme".into(),self.settings_theme.key().into()),
                 ("pet".into(), if self.pet { "1".to_string() } else { "0".to_string() }),

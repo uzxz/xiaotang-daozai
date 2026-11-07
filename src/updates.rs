@@ -182,7 +182,7 @@ impl State {
                                     });
                             });
                         ui.add_space(4.0);
-                        ui.label(egui::RichText::new(if self.message.is_empty(){"更新后自动重启，设置和记录会保留。"}else{&self.message}).color(theme::DIM).size(11.5));
+                        ui.label(egui::RichText::new(if self.message.is_empty(){"更新后自动重启，设置和记录会保留。"}else{&self.message}).color(theme::DIM).size(crate::theme::ui_size(11.5)));
                         if self.cancel.is_some() {
                             ui.add(egui::ProgressBar::new(self.progress).fill(theme::BLUE).desired_height(8.0));
                             ui.horizontal(|ui| {
@@ -209,13 +209,13 @@ impl State {
                         }
                         ui.add_space(2.0);
                         ui.horizontal(|ui| {
-                            ui.hyperlink_to(egui::RichText::new("飞书备用下载").size(11.5).color(theme::BLUE),BACKUP_DOWNLOAD);
+                            ui.hyperlink_to(egui::RichText::new("飞书备用下载").size(crate::theme::ui_size(11.5)).color(theme::BLUE),BACKUP_DOWNLOAD);
                             ui.label(egui::RichText::new("·").color(theme::DIM));
-                            ui.hyperlink_to(egui::RichText::new("浏览器下载").size(11.5).color(theme::GRAY),&release.page);
+                            ui.hyperlink_to(egui::RichText::new("浏览器下载").size(crate::theme::ui_size(11.5)).color(theme::GRAY),&release.page);
                             ui.label(egui::RichText::new("·").color(theme::DIM));
-                            ui.hyperlink_to(egui::RichText::new("查看发布说明").size(11.5).color(theme::GRAY),&release.page);
+                            ui.hyperlink_to(egui::RichText::new("查看发布说明").size(crate::theme::ui_size(11.5)).color(theme::GRAY),&release.page);
                         });
-                        if release.package.is_none() { ui.label(egui::RichText::new("此版本请通过浏览器下载。").size(11.5).color(theme::DIM)); }
+                        if release.package.is_none() { ui.label(egui::RichText::new("此版本请通过浏览器下载。").size(crate::theme::ui_size(11.5)).color(theme::DIM)); }
                     });
                     if self.rx.is_some() { ctx.request_repaint_after(Duration::from_millis(100)); }
                 });
